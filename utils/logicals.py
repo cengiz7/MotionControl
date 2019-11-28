@@ -25,7 +25,7 @@ class SignDetector:
     def __init__(self, names, frame_width, frane_height, movement_speed):
         self.controls = controllers.Controls(frame_width, frane_height, movement_speed)
         # minimun frame count for activating sign controlled action
-        self.min_dtct_actv_count = 4
+        self.min_dtct_actv_count = 4  # initial value for avarage 15-20 fps
         for name in names:
             self.signs_dict[name] = 0
         

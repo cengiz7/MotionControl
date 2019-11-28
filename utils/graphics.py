@@ -1,11 +1,6 @@
 import time
 
 
-class MouseTrackWindow:
-    def __init__(self):
-        pass
-
-
 class KeyboardTrackWindow:
     def __init__(self):
         pass

@@ -5,12 +5,12 @@ import time
 from math import fabs, sqrt
 from PIL import ImageGrab
 
+
 mouse = Controller()
 
 
 def calculate_relative(frame_area, screen_area, detection, last_dtc_location, last_bottom_location):
     relative_size = sqrt(sqrt(frame_area / (detection[2][2] * detection[2][3])) * (screen_area/frame_area))/1.5
-    print(relative_size)
     # when we switch duz sign to another sign, mouse cursor moves downwar if the new sign size taking less area then duz
     # sign, so if y max and center x cordinate changing less then we want, dont move the cursor
     if fabs((detection[2][1] + (detection[2][3] / 2)) - last_bottom_location) > relative_size and fabs(detection[2][0] - last_dtc_location[0]) > relative_size:
@@ -44,6 +44,7 @@ class Controls:
 
     def release_left_press(self):
         mouse.release(Button.left)
+        self.left_button_pressed = False
 
     def move_smooth(self, x, y, speed):
         speed = 30 / (1 / speed)
@@ -64,7 +65,6 @@ class Controls:
 
     def action(self, sign, detection):
         # TODO: check rectangle size for validation
-
         # Mouse Cursor movements
         if sign == 'duz':
             self.move_cursor(detection)
@@ -73,10 +73,9 @@ class Controls:
             if not self.left_button_pressed:
                 mouse.press(Button.left)
                 self.left_button_pressed = True
-                self.move_cursor(detection)
-
+            self.move_cursor(detection)
         # Letf Mouse Click
-        if sign == 'basisaretserce':
+        if sign == 'peace':
             if not self.left_button_clicked:
                 mouse.click(Button.left, 1)
                 self.left_button_clicked = True
