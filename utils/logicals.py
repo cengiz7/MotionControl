@@ -1,6 +1,7 @@
 from utils import controllers
 import time
 
+
 def convertBack(x, y, w, h):
     xmin = int(round(x - (w / 2)))
     xmax = int(round(x + (w / 2)))
@@ -17,6 +18,7 @@ def pt_extractor(detection):
     xmin, ymin, xmax, ymax = convertBack(float(x), float(y), float(w), float(h))
     # return pt1 , pt2
     return (xmin, ymin), (xmax, ymax)
+
 
 class SignDetector:
     signs_dict = {}
