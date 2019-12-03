@@ -4,6 +4,7 @@ from pynput.mouse import Button, Controller
 import time
 from math import fabs, sqrt
 from PIL import ImageGrab
+from queue import Queue
 
 
 mouse = Controller()
@@ -23,8 +24,22 @@ def calculate_relative(frame_area, screen_area, detection, last_dtc_location, la
     else:
         return 0, 0
 
+
+def move_smooth(mouse_movement_queue):
+    while True:
+        (x, y, speed) = mouse_movement_queue.get()
+        speed = 30 / (1 / speed)
+        x = x / speed
+        y = y / speed
+        for _ in range(round(speed)):
+            mouse.move(round(x), round(y))
+            # time.sleep((1 / speed) / 4)
+
+
 class Controls:
     def __init__(self, frame_width, frame_height, movement_speed):
+        self.mouse_movement_queue = Queue()
+        threading.Thread(target=move_smooth, args=(self.mouse_movement_queue,)).start()
         img = ImageGrab.grab()
         self.screen_size = img.size
         self.screen_area = img.size[0] * img.size[1]
@@ -46,21 +61,14 @@ class Controls:
         mouse.release(Button.left)
         self.left_button_pressed = False
 
-    def move_smooth(self, x, y, speed):
-        speed = 30 / (1 / speed)
-        x = x / speed
-        y = y / speed
-        for _ in range(round(speed)):
-            mouse.move(round(x), round(y))
-            time.sleep((1 / speed) / 4)
-
     def move_cursor(self, detection):
         # calculate relative will return 0, 0 for unnecessary movements
         (x, y) = calculate_relative(self.frame_area, self.screen_area, detection, self.last_dtc_location,
                                     self.last_bottom_location)
         if fabs(x) + fabs(y) > 0 and x < self.screen_size[0] / 3 and y < self.screen_size[1] / 3:
             self.last_bottom_location = int(round(detection[2][1] + (detection[2][3] / 2)))
-            threading.Thread(target=self.move_smooth, args=(x, y, self.movement_speed)).start()
+            # threading.Thread(target=move_smooth, args=(x, y, self.movement_speed)).start()
+            self.mouse_movement_queue.put((x, y, self.movement_speed))
             self.last_dtc_location = [detection[2][0], detection[2][1]]
 
     def action(self, sign, detection):

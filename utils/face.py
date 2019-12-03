@@ -6,12 +6,13 @@ import cv2
 import os
 import face_recognition
 import pickle
+from math import fabs
 from utils import graphics
 from glob import glob
 from time import time
 
 roi = [(0, 0), (0, 0)]  # global variable for interested hand area
-old_face_area = [(0, 0), (0, 0)]
+old_fc_area = [(0, 0), (0, 0)]
 
 dt_path = 'datasets/'
 fc_path = 'user_images/'
@@ -217,7 +218,7 @@ def select_user(face_path, cap):
 
 
 ##############################################################################
-#___________________________ FACE RECOGNITIONS _______________________________
+#___________________________ FACE RECOGNITIONS ______________________________#
 ##############################################################################
 
 
@@ -226,22 +227,25 @@ def is_face_moved(p1, p2):
     (right, bottom) = p2
     h_center = p1[0] + int((p2[0]-p1[0]) / 2)
     v_center = p1[1] + int((p2[1]-p1[1]) / 2)
-    if old_face_area[0][0] <= h_center <= old_face_area[1][0] and old_face_area[0][1] <= v_center <= old_face_area[1][1]:
-        return False
+    if old_fc_area[0][0] <= h_center <= old_fc_area[1][0] and old_fc_area[0][1] <= v_center <= old_fc_area[1][1]:
+        # for both vertical and horizontal border lenght change check with 0.25 sensitivity
+        if fabs((p2[0]-p1[0]) - (old_fc_area[1][0] - old_fc_area[0][0])) / (p2[0]-p1[0]) < 0.25 or\
+                fabs((p2[1]-p1[1]) - (old_fc_area[1][1] - old_fc_area[0][1])) / (p2[1] - p1[1]) < 0.25:
+            return False
+        return True
     return True
 
 
 def calculate_roi(width, height, p1, p2):
     # use newly calculated face area for roi if it's center out of the old face area borders
     if is_face_moved(p1, p2):
-        old_face_area[0] = p1
-        old_face_area[1] = p2
-    (left, top) = old_face_area[0]
-    (right, bottom) = old_face_area[1]
-    horizontal = int((right-left) * 3.5)
+        old_fc_area[0] = p1
+        old_fc_area[1] = p2
+    (left, top) = old_fc_area[0]
+    (right, bottom) = old_fc_area[1]
+    horizontal = int((right-left) * 4)
     vertical_top = int((bottom-top) * 2.5)
-    # for smaller roi at the bottom of the face
-    vertical_bottom = int((bottom-top) * 2)
+    vertical_bottom = int((bottom-top) * 2)  # for smaller roi at the bottom of the face
     right = right + horizontal if right + horizontal <= width else width
     left = left - horizontal if left - horizontal >= 0 else 0
     bottom = bottom + vertical_bottom if bottom + vertical_bottom <= height else height
@@ -327,7 +331,7 @@ def detect_faces(cascade, enCodings, frame_queue, user_name, w, h):
                 # set roi to max frame size
                 roi = [(0, 0), (w, h)]
         # display the image to our screen
-        cv2.imshow("Frame", frame)
+        cv2.imshow("Face Detection", frame)
         key = cv2.waitKey(1) & 0xFF
 
         # if the `q` key was pressed, break from the loop

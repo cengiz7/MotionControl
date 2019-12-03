@@ -22,6 +22,7 @@ old_width, old_height = 0, 0
 dshow_active = False
 thresh_val = 0.7
 movement_speed = 1
+default_activator_deactivator_val = 4
 
 
 darknet_image = darknet_dll.make_image(frame_width, frame_height, 3)
@@ -44,6 +45,8 @@ def reCreateDarknetImage(width, height):
 
 
 def YOLO():
+    full_frame_queue = Queue()
+    processed_frame_queue = Queue()
     global metaMain, netMain, altNames, frame_width, frame_height, thresh_val, old_width, old_height, darknet_image
 
     if not os.path.exists(configPath):
@@ -89,9 +92,9 @@ def YOLO():
     face.roi[1] = (frame_width, frame_height)
 
     user_pickle, user_name = face.select_user(facePath, cap)
-    frame_queue = Queue()
-    th=Thread(target=face.detect_faces, args=(faceCascade, user_pickle, frame_queue,user_name,
-                                              frame_width, frame_height))
+
+    th = Thread(target=face.detect_faces, args=(faceCascade, user_pickle, full_frame_queue, user_name,
+                                                frame_width, frame_height))
     th.daemon = True
     th.start()
 
@@ -106,13 +109,13 @@ def YOLO():
     while True:
         frame_read = cv2.flip(cap.read()[1], 1)
         # empty the queue for prevent queue from overfeeding
-        while not frame_queue.empty():
+        while not full_frame_queue.empty():
             try:
-                frame_queue.get_nowait()
+                full_frame_queue.get_nowait()
             except Empty:
                 continue
-            frame_queue.task_done()
-        frame_queue.put(frame_read)
+            full_frame_queue.task_done()
+        full_frame_queue.put(frame_read)
         # y1:y2, x1:x2 for cropping
         # 4 equals cv2.COLOR_BGR2RGB = 4
         frame_rgb = cv2.cvtColor(frame_read[face.roi[0][1]:face.roi[1][1], face.roi[0][0]:face.roi[1][0]], 4)
