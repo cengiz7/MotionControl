@@ -43,8 +43,8 @@ def YOLO():
     net_main = None
     meta_main = None
     alt_names = None
-    frame_width, frame_height = 1280, 720
-    # frame_width, frame_height = 640, 480
+    # frame_width, frame_height = 1280, 720
+    frame_width, frame_height = 640, 480
     dshow_active = False
     thresh_val = 0.7
     movement_speed = 1
@@ -124,18 +124,7 @@ def YOLO():
 
     while True:
         (detections, frame_rgb, frame_count) = detections_queue.get()
-        if frame_count == yolo_frame_count:
-            magic(detections, frame_rgb)
-            yolo_frame_count += 1
-        else:
-            if yolo_frame_count in tmp_count_list:
-                index = tmp_count_list.index(yolo_frame_count)
-                magic(tmp_detections.pop(index), tmp_frame_list.pop(index))
-                tmp_count_list.pop(index)
-
-            tmp_frame_list.append(frame_rgb)
-            tmp_count_list.append(frame_count)
-            tmp_detections.append(detections)
+        magic(detections, frame_rgb)
 
 if __name__ == "__main__":
     YOLO()
