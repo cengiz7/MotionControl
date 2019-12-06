@@ -11,7 +11,6 @@ from utils import graphics
 from glob import glob
 from time import time
 
-roi = [(0, 0), (0, 0)]  # global variable for interested hand area
 old_fc_area = [(0, 0), (0, 0)]
 
 dt_path = 'datasets/'
@@ -253,16 +252,27 @@ def calculate_roi(width, height, p1, p2):
     return (left, top), (right, bottom)
 
 
-def detect_faces(cascade, enCodings, frame_queue, user_name, w, h):
-    global roi
+def queue_size_check(queue):
+    # empty the queue for prevent queue from overfeeding
+    while queue.qsize() > 1:
+        try:
+            queue.get_nowait()
+        except Empty:
+            continue
+        queue.task_done()
+
+
+def detect_faces(cascade, enCodings, user_name, w, h, cropped_frame_queue, cap):
+    roi = [(0, 0), (w, h)]
     data = pickle.loads(open(enCodings, "rb").read())
     detector = cv2.CascadeClassifier(cascade)
     fps = graphics.ShowFps(3)
     fps.start()
     undetected = 0
+    frame_count = 0
 
     while True:
-        frame = frame_queue.get()
+        frame = cv2.flip(cap.read()[1], 1)
         fps_val = fps.next()
         # frame = imutils.resize(frame, width=500)
         frame = cv2.convertScaleAbs(frame, alpha=1.4, beta=30)
@@ -273,7 +283,7 @@ def detect_faces(cascade, enCodings, frame_queue, user_name, w, h):
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         # detect faces in the grayscale frame
-        rects = detector.detectMultiScale(gray, scaleFactor=1.15, minNeighbors=6, minSize=(15, 15), maxSize=(300, 300),
+        rects = detector.detectMultiScale(gray, scaleFactor=1.15, minNeighbors=5, minSize=(10, 10), maxSize=(500, 500),
                                           flags=cv2.CASCADE_SCALE_IMAGE)
 
         # OpenCV returns bounding box coordinates in (x, y, w, h) order
@@ -330,10 +340,15 @@ def detect_faces(cascade, enCodings, frame_queue, user_name, w, h):
             if undetected == round(fps_val):
                 # set roi to max frame size
                 roi = [(0, 0), (w, h)]
+        frame_count += 1
+
+        queue_size_check(cropped_frame_queue)
+        # put cropped frame in to the queue
+        # y1:y2, x1:x2 for cropping
+        cropped_frame_queue.put((frame[roi[0][1]:roi[1][1], roi[0][0]:roi[1][0]], frame_count))
         # display the image to our screen
         cv2.imshow("Face Detection", frame)
         key = cv2.waitKey(1) & 0xFF
-
         # if the `q` key was pressed, break from the loop
         if key == ord("q"):
             break

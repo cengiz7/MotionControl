@@ -7,25 +7,6 @@ from utils import graphics
 from utils import logicals
 from utils import face
 
-configPath = "./data/yolov3-obj.cfg"
-weightPath = "./data/yolov3-obj_13000.weights"
-metaPath = "./data/obj.data"
-facePath = "./data/face_dataset/"
-faceCascade = facePath + "frontalface_default.xml"
-
-netMain = None
-metaMain = None
-altNames = None
-# frame_width, frame_height = 1280, 720
-frame_width, frame_height = 640, 480
-old_width, old_height = 0, 0
-dshow_active = False
-thresh_val = 0.7
-movement_speed = 1
-default_activator_deactivator_val = 4
-
-
-darknet_image = darknet_dll.make_image(frame_width, frame_height, 3)
 
 def cvDrawBoxes(detections, img):
     for detection in detections:
@@ -39,28 +20,47 @@ def cvDrawBoxes(detections, img):
     return img
 
 
-def reCreateDarknetImage(width, height):
-    global darknet_image
-    darknet_image = darknet_dll.make_image(width, height, 3)
+def yolo_loop(cropped_frame_queue, detections_queue, net_main, meta_main, thresh_val):
+    while True:
+        (frame, frame_count) = cropped_frame_queue.get()
+        # 4 equals cv2.COLOR_BGR2RGB = 4
+        frame_rgb = cv2.cvtColor(frame, 4)
+        darknet_image = darknet_dll.make_image(frame_rgb.shape[1], frame_rgb.shape[0], 3)
+        darknet_dll.copy_image_from_bytes(darknet_image, frame_rgb.tobytes())
+        detections = darknet_dll.detect_image(net_main, meta_main, darknet_image, thresh=thresh_val)
+        detections_queue.put((detections, frame, frame_count))
 
 
 def YOLO():
-    full_frame_queue = Queue()
-    processed_frame_queue = Queue()
-    global metaMain, netMain, altNames, frame_width, frame_height, thresh_val, old_width, old_height, darknet_image
+    cropped_frame_queue = Queue()
+    detections_queue = Queue()
+    configPath = "./data/yolov3-obj.cfg"
+    weightPath = "./data/yolov3-obj_13000.weights"
+    metaPath = "./data/obj.data"
+    facePath = "./data/face_dataset/"
+    faceCascade = facePath + "frontalface_default.xml"
 
+    net_main = None
+    meta_main = None
+    alt_names = None
+    frame_width, frame_height = 1280, 720
+    # frame_width, frame_height = 640, 480
+    dshow_active = False
+    thresh_val = 0.7
+    movement_speed = 1
+    default_activator_deactivator_val = 4
     if not os.path.exists(configPath):
         raise ValueError("Invalid config path `" + os.path.abspath(configPath)+"`")
     if not os.path.exists(weightPath):
         raise ValueError("Invalid weight path `" + os.path.abspath(weightPath)+"`")
     if not os.path.exists(metaPath):
         raise ValueError("Invalid data file path `" + os.path.abspath(metaPath)+"`")
-    if netMain is None:
-        netMain = darknet_dll.load_net_custom(configPath.encode(
+    if net_main is None:
+        net_main = darknet_dll.load_net_custom(configPath.encode(
             "ascii"), weightPath.encode("ascii"), 0, 1)  # batch size = 1
-    if metaMain is None:
-        metaMain = darknet_dll.load_meta(metaPath.encode("ascii"))
-    if altNames is None:
+    if meta_main is None:
+        meta_main = darknet_dll.load_meta(metaPath.encode("ascii"))
+    if alt_names is None:
         try:
             with open(metaPath) as metaFH:
                 metaContents = metaFH.read()
@@ -74,7 +74,7 @@ def YOLO():
                     if os.path.exists(result):
                         with open(result) as namesFH:
                             namesList = namesFH.read().strip().split("\n")
-                            altNames = [x.strip() for x in namesList]
+                            alt_names = [x.strip() for x in namesList]
                 except TypeError:
                     pass
         except Exception:
@@ -88,69 +88,54 @@ def YOLO():
 
     cap.set(3, frame_width)
     cap.set(4, frame_height)
-    # y1:y2, x1:x2
-    face.roi[1] = (frame_width, frame_height)
 
+    # get selected user
     user_pickle, user_name = face.select_user(facePath, cap)
 
-    th = Thread(target=face.detect_faces, args=(faceCascade, user_pickle, full_frame_queue, user_name,
-                                                frame_width, frame_height))
-    th.daemon = True
-    th.start()
-
-
+    Thread(target=face.detect_faces, args=(faceCascade, user_pickle, user_name, frame_width, frame_height,
+                                           cropped_frame_queue, cap)).start()
 
     print("Starting the YOLO loop...")
+    Thread(target=yolo_loop, args=(cropped_frame_queue, detections_queue, net_main, meta_main, thresh_val)).start()
+    Thread(target=yolo_loop, args=(cropped_frame_queue, detections_queue, net_main, meta_main, thresh_val)).start()
 
-    sign_detector = logicals.SignDetector(altNames, frame_width, frame_height, movement_speed)
-
+    yolo_frame_count = 1
+    tmp_frame_list = []
+    tmp_count_list = []
+    tmp_detections = []
+    sign_detector = logicals.SignDetector(alt_names, frame_width, frame_height, movement_speed)
     fps = graphics.ShowFps(3)
     fps.start()
-    while True:
-        frame_read = cv2.flip(cap.read()[1], 1)
-        # empty the queue for prevent queue from overfeeding
-        while not full_frame_queue.empty():
-            try:
-                full_frame_queue.get_nowait()
-            except Empty:
-                continue
-            full_frame_queue.task_done()
-        full_frame_queue.put(frame_read)
-        # y1:y2, x1:x2 for cropping
-        # 4 equals cv2.COLOR_BGR2RGB = 4
-        frame_rgb = cv2.cvtColor(frame_read[face.roi[0][1]:face.roi[1][1], face.roi[0][0]:face.roi[1][0]], 4)
-        # frame_resized = cv2.resize(frame_rgb,(darknet_dll.network_width(netMain),darknet_dll.network_height(netMain)),
-        # interpolation=cv2.INTER_LINEAR)
-        # frame_resized = cv2.resize(frame_rgb,(frame_width,frame_height),interpolation=cv2.INTER_LINEAR)
 
-        # Create an image we reuse for each detect
-        # darknet_image=darknet_dll.make_image(darknet_dll.network_width(netMain),darknet_dll.network_height(netMain),3)
-        # recreate new darknet image only if new frame shape different that old one
-        tmp_w, tmp_h = frame_rgb.shape[1], frame_rgb.shape[0]
-        if old_width != tmp_w or old_height != tmp_h:
-            reCreateDarknetImage(tmp_w, tmp_h)
-            old_width, old_height = tmp_w, tmp_h
-
-        darknet_dll.copy_image_from_bytes(darknet_image, frame_rgb.tobytes())
-
-        detections = darknet_dll.detect_image(netMain, metaMain, darknet_image, thresh=thresh_val)
-
+    def magic(detections, frame_rgb):
         image = cvDrawBoxes(detections, cv2.cvtColor(frame_rgb, cv2.COLOR_BGR2RGB))
-
         fps_val = fps.next()
-
         # update minimum detect activator count (1 for each 4 frames)
-        sign_detector.update_min_activator(round(fps_val/default_activator_deactivator_val))
+        sign_detector.update_min_activator(round(fps_val / default_activator_deactivator_val))
         # hand sign detection
         sign_detector.detect_sign(detections)
         cv2.putText(image, f'{fps_val:3.2f} fps', (15, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
 
-        cv2.imshow('Demo', image)
+        cv2.imshow('Demo Double Threaded', image)
         k = cv2.waitKey(1) & 0xFF
         if k == ord('q') or k == ord('Q'):
             # baska tus icin ord c gibi elif koyabilirsin
-            cv2.destroyAllWindows()
-            exit(1)
+            exit(0)
+
+    while True:
+        (detections, frame_rgb, frame_count) = detections_queue.get()
+        if frame_count == yolo_frame_count:
+            magic(detections, frame_rgb)
+            yolo_frame_count += 1
+        else:
+            if yolo_frame_count in tmp_count_list:
+                index = tmp_count_list.index(yolo_frame_count)
+                magic(tmp_detections.pop(index), tmp_frame_list.pop(index))
+                tmp_count_list.pop(index)
+
+            tmp_frame_list.append(frame_rgb)
+            tmp_count_list.append(frame_count)
+            tmp_detections.append(detections)
 
 if __name__ == "__main__":
     YOLO()
