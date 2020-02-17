@@ -1,11 +1,9 @@
 from collections import deque
 import threading
 from pynput.mouse import Button, Controller
-import time
 from math import fabs, sqrt, pow
 from PIL import ImageGrab
 from queue import Queue
-
 
 mouse = Controller()
 
@@ -39,14 +37,12 @@ def calculate_relative(frame_area, screen_area, detection, last_dtc_location, la
 def move_smooth(mouse_movement_queue):
     while True:
         (x, y) = mouse_movement_queue.get()
-        # complete movement in 4 step for smooth movement
-        for _ in range(4):
-            mouse.move(round(x/4), round(y/4))
+        mouse.move(round(x), round(y))
 
 
 def calculate_cursor_movement(x, y, speed, radius):
-    x = (radius * (x/radius) * speed) / 2
-    y = (radius * (y/radius) * speed) / 2
+    x = (radius * (x/radius) * speed) / 4
+    y = (radius * (y/radius) * speed) / 4
     return x, y
 
 
@@ -54,7 +50,7 @@ class Controls:
     def __init__(self, frame_width, frame_height, movement_speed):
         self.mouse_movement_queue = Queue()
         th = threading.Thread(target=move_smooth, args=(self.mouse_movement_queue,))
-        th.daemon = False
+        th.daemon = True
         th.start()
         img = ImageGrab.grab()
         self.screen_size = img.size
@@ -94,7 +90,7 @@ class Controls:
         abs_x = detection[2][0] - self.first_dtc_location[0]
         abs_y = detection[2][1] - self.first_dtc_location[1]
         distance = sqrt(pow(fabs(abs_x), 2) + pow(fabs(abs_y), 2))  # hipotenus to detection center
-        print(distance)
+        # print( distance )
         if distance > self.cursor_center_radius:
             x, y = calculate_cursor_movement(abs_x, abs_y, self.movement_speed, self.cursor_center_radius)
             self.mouse_movement_queue.put((x, y))

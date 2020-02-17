@@ -1,4 +1,4 @@
-from utils import controllers
+from MotionControl.utils import controllers
 
 
 def convertBack(x, y, w, h):
@@ -19,9 +19,17 @@ def pt_extractor(detection):
     return (xmin, ymin), (xmax, ymax)
 
 
+def calculate_radius(detection_width, frame_width):
+    radius = (detection_width / 30) * frame_width / detection_width
+    if radius*2 > detection_width:
+        radius = detection_width
+    return radius
+
+
 class SignDetector:
     signs_dict = {}
     controls = None
+    reset_check = False  # boolean for sign_dict reset jobs
 
     def __init__(self, names, frame_width, frane_height, movement_speed):
         self.frame_width = frame_width
@@ -30,10 +38,14 @@ class SignDetector:
         self.min_dtct_actv_count = 4  # initial value for avarage 15-20 fps
         for name in names:
             self.signs_dict[name] = 0
-        
+
+    def reset_detection_counts(self):
+        for name in self.signs_dict:
+            self.signs_dict[name] = 0
+
     def update_min_activator(self, count):
         self.min_dtct_actv_count = count
-        
+
     def detect_sign(self, detections):
         for detection in detections:
             name = detection[0].decode()
@@ -44,16 +56,13 @@ class SignDetector:
             else:
                 # correct some values just before calling action function at the other detection
                 if self.signs_dict[name] == self.min_dtct_actv_count:
-                    if name != 'duz':
+                    if name != 'duz' and name != 'basisaret':
                         self.controls.first_dtc_location = [0, 0]
-                    if name == 'duz':
-                        # set last detection point(center for initial movement calculations
+                    if name == 'duz' or name == 'basisaret':
+                        # set last detection point center for initial movement calculation and others
                         self.controls.first_dtc_location = [detection[2][0], detection[2][1]]
-                        self.controls.cursor_center_radius = (self.frame_width / detection[2][2]) * 2 + self.frame_width / 50
-                        if self.controls.cursor_center_radius > detection[2][2]:
-                            self.controls.cursor_center_radius = detection[2][2] / 2
-                        # put the same value
-                        # self.controls.last_dtc_location = self.controls.first_dtc_location
+                        self.controls.cursor_center_radius = calculate_radius(detection[2][2], self.frame_width)
+                        self.controls.last_dtc_location = self.controls.first_dtc_location  # for initial display
                         # self.controls.last_bottom_location = int(round(detection[2][1] +(detection[2][3]/2)))  # y max
                     # if its not mouse hold move, release the button
                     if name != 'basisaret':

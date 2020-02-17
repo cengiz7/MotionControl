@@ -7,7 +7,7 @@ import os
 import face_recognition
 import pickle
 from math import fabs
-from utils import graphics
+from MotionControl.utils import graphics
 from glob import glob
 from time import time
 
@@ -265,7 +265,7 @@ def detect_faces(cascade, enCodings, frame_queue, user_name, w, h):
         frame = frame_queue.get()
         fps_val = fps.next()
         # frame = imutils.resize(frame, width=500)
-        frame = cv2.convertScaleAbs(frame, alpha=1.4, beta=30)
+        # frame = cv2.convertScaleAbs(frame, alpha=1.4, beta=30)
         # convert the input frame from (1) BGR to grayscale (for face
         # detection) and (2) from BGR to RGB (for face recognition)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
