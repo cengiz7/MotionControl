@@ -3,9 +3,6 @@ import win32con
 import win32gui
 import wx
 import wx.lib.newevent
-import wx.lib.colourdb
-from wx.lib.floatcanvas import NavCanvas, FloatCanvas, Resources
-
 from cv2 import circle, line
 
 
@@ -40,14 +37,10 @@ def draw_cursor_circles(image, firstx, firsty, radius, lastx, lasty):
 
 global cursor_wnd  # wx window frame variables
 global eightpen_wnd
-ShowWindowEvent, EVT_SHOW_WINDOW = wx.lib.newevent.NewEvent()
-HideWindowEvent, EVT_HIDE_WINDOW = wx.lib.newevent.NewEvent()
-CursorParamsEvent, EVT_CURSOR_PRMS = wx.lib.newevent.NewEvent()
 DestroyApp, EVT_DESTROY_APP = wx.lib.newevent.NewEvent()
-show_evnt = ShowWindowEvent(attr1="Show window event occurred")
-hide_evnt = HideWindowEvent(attr1="Hide window event occurred")
-params_evnt = CursorParamsEvent(attr1=None)
 destroy_evnt = DestroyApp()
+angle = 0  # +- [0-180] * pi / 180
+circle_radius = 50
 
 
 # get wx events as parameter and send it to the target window
@@ -56,15 +49,21 @@ def post_wx_event(target, event):
 
 
 class CursorIndicatorWnd(wx.Frame):
-    def __init__(self, parent, title):
-        self.size = (600, 600)
+    def __init__(self, *args, **kwargs):
+        wx.Frame.__init__(self, parent=None, id=wx.ID_ANY, title="Cursor Draw Demo", size=(700, 700),
+                          style=(wx.FRAME_SHAPED
+                                 | wx.FRAME_NO_TASKBAR
+                                 | wx.STAY_ON_TOP
+                                 #| wx.BORDER_NONE
+                                 | wx.TRANSPARENT_WINDOW)
+                          )
+        self.size = self.GetSize()
+        # cordinates for center circle
         self.circle_centerx = self.size[0]/2
         self.circle_centery = self.size[1]/2
-        super(CursorIndicatorWnd, self).__init__(parent, title=title, size=self.size,
-                                                 style=(wx.CLIP_CHILDREN
-                                                        | wx.STAY_ON_TOP
-                                                        | wx.BORDER_NONE
-                                                        ))
+        self.arrow_img = wx.Image('./data/arrow_images/arrow2-500-188.png', wx.BITMAP_TYPE_PNG)
+
+
         hwnd = self.GetHandle()
         # Obtaining style settings from current extended window
         ext_style_settings = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
@@ -79,17 +78,16 @@ class CursorIndicatorWnd(wx.Frame):
         # Making click-through
         # http://msdn.microsoft.com/en-us/library/windows/desktop/ms633540%28v=vs.85%29.aspx
         win32gui.SetLayeredWindowAttributes(hwnd, 0x00ffffff, 255, win32con.LWA_COLORKEY | win32con.LWA_ALPHA)
-        # Setting frame translucent - byte value
-        # self.SetTransparent(180)  # 0 yapabilirsin
+        #self.SetTransparent(180)  # 0 ile görünmezyapabilirsin
         self.InitUI()
 
     def InitUI(self):
         self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(EVT_SHOW_WINDOW, self.ShowWnd)
-        self.Bind(EVT_HIDE_WINDOW, self.HideWnd)
-        self.Bind(EVT_DESTROY_APP, self.ClsApp)
+        self.Bind(EVT_DESTROY_APP, self.ExitApp)
         self.Centre()
-        self.Show(False)
+        self.Show(True)
+
+
 
     def OnPaint(self, e):
         # yardımcı kaynak
@@ -102,19 +100,19 @@ class CursorIndicatorWnd(wx.Frame):
         # gc.SetPen(wx.RED_PEN)
         # gc.SetPen(wx.Pen("Red", width=6, style=wx.PENSTYLE_USER_DASH))
         gc.SetPen(wx.Pen(wx.Colour(255, 255, 0, 200), width=12, style=wx.PENSTYLE_SHORT_DASH))
-        path.AddCircle(self.circle_centerx, self.circle_centery, 50.0)
+        path.AddCircle(self.circle_centerx, self.circle_centery, circle_radius)
         gc.StrokePath(path)
 
 
-    def HideWnd(self, event):
-        print(event.attr1)
-        self.Hide()
+        # https://github.com/LuaDist/wxwidgets/blob/master/samples/rotate/rotate.cpp
+        # scale ettikten sonra center hesapla
+        # scale edilmiş resmi rotate et
+        img_centre = wx.Point(self.arrow_img.GetWidth() / 2, self.arrow_img.GetHeight() / 2)
+        img = self.arrow_img.Rotate(angle, img_centre)
+        wx.ClientDC(self).DrawBitmap(img.ConvertToBitmap(), 150, 150, False)
 
-    def ShowWnd(self, event):
-        print(event.attr1)
-        self.Show(True)
 
-    def ClsApp(self, event):
+    def ExitApp(self, event=None):
         print("destroy event occurred")
         self.Destroy()
         wx.Abort()
@@ -127,7 +125,7 @@ class KeyboardTrackWindow:
 
 def wait_for_globals():
     while 'cursor_wnd' not in globals():
-        time.sleep(0.1)
+        time.sleep(0.05)
     return
 
 
@@ -136,5 +134,12 @@ def wx_app_main():
     global cursor_wnd
     global eightpen_wnd
     app = wx.App()
-    cursor_wnd = CursorIndicatorWnd(None, 'Drawing demo')
+    cursor_wnd = CursorIndicatorWnd(None)
     app.MainLoop()
+
+
+# moving cursor indicator arrow withing a while loop in a thread for not to slow down other processes
+def arrow_movement(arrow_movement_queue):
+    while True:
+        something = arrow_movement_queue.get()
+        print(something)

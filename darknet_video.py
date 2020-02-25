@@ -1,31 +1,13 @@
 import os
 import cv2
-# import darknet_dll
 from time import sleep
-from threading import Thread
+from math import pi as Pi
 from queue import Queue
+from threading import Thread
+from MotionControl import darknet_dll
 from MotionControl.utils import graphics
 from MotionControl.utils import logicals
 from MotionControl.utils import face
-
-
-
-# run wx app mainloop in a thread
-# it will perform cursor indication and 8pen window animations
-wx_th = Thread(target=graphics.wx_app_main, args=())
-wx_th.daemon = False
-wx_th.start()
-
-# wait till global cursow window variable exists
-graphics.wait_for_globals()
-graphics.post_wx_event(graphics.cursor_wnd, graphics.show_evnt)
-sleep(30)
-graphics.post_wx_event(graphics.cursor_wnd, graphics.hide_evnt)
-graphics.post_wx_event(graphics.cursor_wnd, graphics.destroy_evnt)
-sleep(2)
-exit(1)
-
-
 
 
 configPath = "./data/yolov3-obj.cfg"
@@ -70,14 +52,46 @@ def recreate_darknet_image(width, height):
     darknet_image = darknet_dll.make_image(width, height, 3)
 
 
-def user_selection_and_detection():
-    pass
+def user_selection_and_detection(cap, full_frame_queue):
+    # User create update delete and select process
+    user_pickle, user_name = face.select_user(facePath, cap)
+
+    # start a face detection process thread for selected user detection
+    th = Thread(target=face.detect_faces, args=(faceCascade, user_pickle,
+                                                full_frame_queue, user_name,
+                                                frame_width, frame_height))
+    th.daemon = True
+    th.start()
+
+
+def prepare_wxapp(arrow_movement_queue):
+    # run wx app mainloop in a thread
+    # it will perform cursor indication and 8pen window animations
+    wx_th = Thread(target=graphics.wx_app_main, args=())
+    wx_th.daemon = True
+    wx_th.start()
+
+    # moving cursor indicator arrow withing a while loop in a thread for not to slow down other processes
+    arrow_th = Thread(target=graphics.arrow_movement, args=(arrow_movement_queue,))
+    arrow_th.daemon = True
+    arrow_th.start()
+    """
+    # wait till global cursow window variable exists
+    graphics.wait_for_globals()
+    graphics.cursor_wnd.Show()
+    sleep(2)
+    graphics.angle = 30 * Pi / 180
+    graphics.cursor_wnd.Refresh()
+    sleep(2)
+    graphics.cursor_wnd.Hide()
+    #graphics.post_wx_event(graphics.cursor_wnd, graphics.destroy_evnt)
+    """
 
 
 def YOLO():
-    full_frame_queue = Queue()
-    processed_frame_queue = Queue()
     global metaMain, netMain, altNames, frame_width, frame_height, thresh_val, old_width, old_height, darknet_image
+    full_frame_queue = Queue()
+    arrow_movement_queue = Queue()
 
     if not os.path.exists(configPath):
         raise ValueError("Invalid config path `" + os.path.abspath(configPath)+"`")
@@ -122,18 +136,10 @@ def YOLO():
     face.roi[1] = (frame_width, frame_height)
 
 
-    # User create update delete and select process
-    user_pickle, user_name = face.select_user(facePath, cap)
-
-    # start a face detection process thread for selected user detection
-    th = Thread(target=face.detect_faces, args=(faceCascade, user_pickle,
-                                                full_frame_queue, user_name,
-                                                frame_width, frame_height))
-    th.daemon = True
-    th.start()
-
-
-
+    # create user detection thread and make user selection
+    user_selection_and_detection(cap, full_frame_queue)
+    # prepare wx app for GUIs
+    prepare_wxapp(arrow_movement_queue)
 
 
     print("Starting the YOLO loop...")
@@ -191,6 +197,7 @@ def YOLO():
                                                      sign_detector.controls.cursor_center_radius,
                                                      sign_detector.controls.last_dtc_location[0],
                                                      sign_detector.controls.last_dtc_location[1])
+
         else:
             # if undetected frame count >= to fps/default_val then reset old detection count values
             undetected_count += 1
