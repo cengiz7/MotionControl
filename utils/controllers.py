@@ -47,7 +47,8 @@ def calculate_cursor_movement(x, y, speed, radius):
 
 
 class Controls:
-    def __init__(self, frame_width, frame_height, movement_speed):
+    def __init__(self, frame_width, frame_height, movement_speed, names):
+        self.n = names  # for action matching
         self.mouse_movement_queue = Queue()
         th = threading.Thread(target=move_smooth, args=(self.mouse_movement_queue,))
         th.daemon = True
@@ -75,6 +76,7 @@ class Controls:
         mouse.release(Button.left)
         self.left_button_pressed = False
 
+    # currently this fucntıon is useless you can delete it
     def old_move_cursor(self, detection):
         # calculate relative will return 0, 0 for unnecessary movements
         (x, y) = calculate_relative(self.frame_area, self.screen_area, detection, self.last_dtc_location,
@@ -98,16 +100,16 @@ class Controls:
     def action(self, sign, detection):
         # TODO: check rectangle size for validation
         # Mouse Cursor movements
-        if sign == 'duz':
+        if sign == self.n['move']:
             self.move_cursor(detection)
         # Left Mouse Press
-        if sign == 'basisaret':
+        if sign == self.n['press_move']:
             if not self.left_button_pressed:
                 mouse.press(Button.left)
                 self.left_button_pressed = True
             self.move_cursor(detection)
         # Letf Mouse Click
-        if sign == 'peace':
+        if sign == self.n['left_click']:
             if not self.left_button_clicked:
                 mouse.click(Button.left, 1)
                 self.left_button_clicked = True

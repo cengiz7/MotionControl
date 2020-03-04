@@ -1,7 +1,5 @@
 import os
 import cv2
-from time import sleep
-from math import pi as Pi
 from queue import Queue
 from threading import Thread
 from MotionControl import darknet_dll
@@ -25,11 +23,11 @@ old_width, old_height = 0, 0
 dshow_active = False
 thresh_val = 0.7
 movement_speed = 1
-alpha, beta = 1.3, 30
+alpha, beta = 1.15, 20
 # higher activator or deactivator value means less frames to take an action (beacuse Fps/default_val)
 default_activator_val = 4.0
 default_deactivator_val = 2.0
-
+names = {'move': 'duz', 'press_move': 'basisaret', 'left_click': 'peace', 'empty': 'yumruk'}
 
 
 darknet_image = darknet_dll.make_image(frame_width, frame_height, 3)
@@ -64,34 +62,19 @@ def user_selection_and_detection(cap, full_frame_queue):
     th.start()
 
 
-def prepare_wxapp(arrow_movement_queue):
+def prepare_wxapp():
     # run wx app mainloop in a thread
     # it will perform cursor indication and 8pen window animations
     wx_th = Thread(target=graphics.wx_app_main, args=())
     wx_th.daemon = True
     wx_th.start()
-
-    # moving cursor indicator arrow withing a while loop in a thread for not to slow down other processes
-    arrow_th = Thread(target=graphics.arrow_movement, args=(arrow_movement_queue,))
-    arrow_th.daemon = True
-    arrow_th.start()
-    """
     # wait till global cursow window variable exists
-    graphics.wait_for_globals()
-    graphics.cursor_wnd.Show()
-    sleep(2)
-    graphics.angle = 30 * Pi / 180
-    graphics.cursor_wnd.Refresh()
-    sleep(2)
-    graphics.cursor_wnd.Hide()
-    #graphics.post_wx_event(graphics.cursor_wnd, graphics.destroy_evnt)
-    """
+    # graphics.wait_for_globals()
 
 
 def YOLO():
     global metaMain, netMain, altNames, frame_width, frame_height, thresh_val, old_width, old_height, darknet_image
     full_frame_queue = Queue()
-    arrow_movement_queue = Queue()
 
     if not os.path.exists(configPath):
         raise ValueError("Invalid config path `" + os.path.abspath(configPath)+"`")
@@ -124,7 +107,7 @@ def YOLO():
         except Exception:
             pass
 
-
+    ##################################### BEGIN #############################################
     if dshow_active:
         cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     else:
@@ -135,25 +118,22 @@ def YOLO():
     # y1:y2, x1:x2
     face.roi[1] = (frame_width, frame_height)
 
+    # ######## prepare wx app for GUIs ########
+    prepare_wxapp()
 
-    # create user detection thread and make user selection
+    # ######## create user detection thread and make user selection ########
     user_selection_and_detection(cap, full_frame_queue)
-    # prepare wx app for GUIs
-    prepare_wxapp(arrow_movement_queue)
 
 
     print("Starting the YOLO loop...")
 
-    sign_detector = logicals.SignDetector(altNames, frame_width, frame_height, movement_speed)
+    sign_detector = logicals.SignDetector(altNames, frame_width, frame_height, movement_speed, names)
 
     fps = graphics.ShowFps(10)
     fps.start()
     undetected_count = 0
 
     while True:
-        # graphics.post_wx_event(graphics.cursor_wnd, graphics.show_evnt)
-        # graphics.hide_evnt.attr1 = "denemeee"
-        # graphics.post_wx_event(graphics.cursor_wnd, graphics.hide_evnt)
         frame_read = cv2.flip(cap.read()[1], 1)
         frame_read = cv2.convertScaleAbs(frame_read, alpha=alpha, beta=beta)
         # empty the queue for prevent queue from overfeeding
@@ -163,57 +143,59 @@ def YOLO():
             except Exception:
                 continue
             full_frame_queue.task_done()
+
+        # put new frame into the queue so face detection can determine the roi
         full_frame_queue.put(frame_read)
-        # y1:y2, x1:x2 for cropping
-        # 4 equals cv2.COLOR_BGR2RGB = 4
-        frame_rgb = cv2.cvtColor(frame_read[face.roi[0][1]:face.roi[1][1], face.roi[0][0]:face.roi[1][0]], 4)
-        # recreate new darknet image only if new frame shape different that old one
-        tmp_w, tmp_h = frame_rgb.shape[1], frame_rgb.shape[0]
-        if old_width != tmp_w or old_height != tmp_h:
-            recreate_darknet_image(tmp_w, tmp_h)
-            old_width, old_height = tmp_w, tmp_h
+        # skip if user not detected
+        if not face.skip_detection:
+            # y1:y2, x1:x2 for cropping
+            # 4 equals cv2.COLOR_BGR2RGB = 4
+            frame_rgb = cv2.cvtColor(frame_read[face.roi[0][1]:face.roi[1][1], face.roi[0][0]:face.roi[1][0]], 4)
+            # recreate new darknet image only if new frame shape different that old one
+            tmp_w, tmp_h = frame_rgb.shape[1], frame_rgb.shape[0]
+            if old_width != tmp_w or old_height != tmp_h:
+                recreate_darknet_image(tmp_w, tmp_h)
+                old_width, old_height = tmp_w, tmp_h
 
-        darknet_dll.copy_image_from_bytes(darknet_image, frame_rgb.tobytes())
+            darknet_dll.copy_image_from_bytes(darknet_image, frame_rgb.tobytes())
 
-        detections = darknet_dll.detect_image(netMain, metaMain, darknet_image, thresh=thresh_val)
-        image = cv2.cvtColor(frame_rgb, cv2.COLOR_BGR2RGB)
+            detections = darknet_dll.detect_image(netMain, metaMain, darknet_image, thresh=thresh_val)
+            image = cv2.cvtColor(frame_rgb, cv2.COLOR_BGR2RGB)
 
-        fps_val = fps.next()
+            fps_val = fps.next()
 
-        # update minimum detect activator count (on every Fps/default_val frames)
-        sign_detector.update_min_activator(round(fps_val/default_activator_val))
+            # update minimum detect activator count (on every Fps/default_val frames)
+            sign_detector.update_min_activator(round(fps_val/default_activator_val))
 
-        # for preventing in vain works when 0 sign detection occurs
-        if len(detections) > 0:
-            undetected_count = 0              # reset undetected count to 0
-            sign_detector.reset_check = False  # reset check true
-            image = draw_boxes(detections, image)
-            # hand sign detection
-            sign_detector.detect_sign(detections)
-            # for drawing cursor control center circle
-            if sign_detector.controls.first_dtc_location != [0, 0]:
-                image = graphics.draw_cursor_circles(image, sign_detector.controls.first_dtc_location[0],
-                                                     sign_detector.controls.first_dtc_location[1],
-                                                     sign_detector.controls.cursor_center_radius,
-                                                     sign_detector.controls.last_dtc_location[0],
-                                                     sign_detector.controls.last_dtc_location[1])
+            # for preventing in vain works when 0 sign detection occurs
+            if len(detections) > 0:
+                undetected_count = 0              # reset undetected count to 0
+                sign_detector.reset_check = False  # reset check true
+                draw_boxes(detections, image)
+                # hand sign detection
+                sign_detector.detect_sign(detections)
 
-        else:
-            # if undetected frame count >= to fps/default_val then reset old detection count values
-            undetected_count += 1
-            if undetected_count >= fps_val/default_deactivator_val:
-                if not sign_detector.reset_check:  # reset only if has not been reset
-                    sign_detector.reset_detection_counts()
-                    sign_detector.controls.first_dtc_location = [0, 0]
-                    sign_detector.reset_check = True  # set reset true
+                # do it only if frame display true
+                if sign_detector.cursor_wnd_dsply:
+                    image = graphics.draw_cursor_circles(image)
+            else:
+                # if undetected frame count >= to fps/default_val then reset old detection count values
+                undetected_count += 1
+                if undetected_count >= fps_val/default_deactivator_val:
+                    if not sign_detector.reset_check:  # reset only if has not been reset
+                        sign_detector.reset_detection_counts()
+                        graphics.cursor_wnd.Hide()
+                        sign_detector.controls.first_dtc_location = [0, 0]
+                        sign_detector.controls.last_dtc_location = [0, 0]
+                        sign_detector.reset_check = True  # set reset true
 
-        cv2.putText(image, f'{fps_val:3.2f} fps', (15, 15), cv2.FONT_HERSHEY_TRIPLEX, 0.55, (0, 255, 0), 1)
+            cv2.putText(image, f'{fps_val:3.2f} fps', (15, 15), cv2.FONT_HERSHEY_TRIPLEX, 0.55, (0, 255, 0), 1)
 
-        cv2.imshow('Demo', image)
-        k = cv2.waitKey(1) & 0xFF
-        # baska tus icin ord c gibi elif koyabilirsin
-        if k == ord('q') or k == ord('Q'):
-            exit(0)
+            cv2.imshow('Demo', image)
+            k = cv2.waitKey(1) & 0xFF
+            # baska tus icin ord c gibi elif koyabilirsin
+            if k == ord('q') or k == ord('Q'):
+                exit(0)
 
 
 if __name__ == "__main__":

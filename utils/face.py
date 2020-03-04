@@ -202,6 +202,7 @@ def select_user(face_path, cap):
             if choice == 1:
                 new_user(face_path, cap)
             elif choice == 5:
+                graphics.post_wx_event(graphics.cursor_wnd, graphics.destroy_evnt)
                 exit(0)
             else:
                 if show_additional:
@@ -220,6 +221,8 @@ def select_user(face_path, cap):
 ##############################################################################
 #___________________________ FACE RECOGNITIONS ______________________________#
 ##############################################################################
+
+skip_detection = False  # for skipping hand detection if current user is not in frame
 
 
 def is_face_moved(p1, p2):
@@ -254,7 +257,7 @@ def calculate_roi(width, height, p1, p2):
 
 
 def detect_faces(cascade, enCodings, frame_queue, user_name, w, h):
-    global roi
+    global roi, skip_detection
     data = pickle.loads(open(enCodings, "rb").read())
     detector = cv2.CascadeClassifier(cascade)
     fps = graphics.ShowFps(3)
@@ -312,6 +315,7 @@ def detect_faces(cascade, enCodings, frame_queue, user_name, w, h):
             # update the list of names
             names.append(name)
         if names.count(user_name) == 1:
+
             # for ((top, right, bottom, left), name) in zip(boxes, names):
             (top, right, bottom, left) = boxes[names.index(user_name)]
             # draw roi
@@ -325,11 +329,15 @@ def detect_faces(cascade, enCodings, frame_queue, user_name, w, h):
             cv2.putText(frame, user_name, (left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             # reset undetected count
             undetected = 0
+            skip_detection = False
         else:
             undetected += 1
+            # below code is checking underected count and if its equal to fps_val which means
+            # approximately frame fer secont value and that means execute it if undetected till 1 sec
             if undetected == round(fps_val):
+                skip_detection = True
                 # set roi to max frame size
-                roi = [(0, 0), (w, h)]
+                # roi = [(0, 0), (w, h)]
         # display the image to our screen
         cv2.imshow("Face Detection", frame)
         cv2.waitKey(1)
