@@ -23,7 +23,8 @@ def calculate_relative(frame_area, screen_area, detection, last_dtc_location, la
     # when we switch duz sign to another sign, mouse cursor moves downward if new sign size taking less area then duz
     # new sign area could be shorter from top x
     # sign, so if y max and center x cordinate changing less then we want, dont move the cursor
-    if fabs((detection[2][1] + (detection[2][3] / 2)) - last_bottom_location) > relative_size and fabs(detection[2][0] - last_dtc_location[0]) > relative_size:
+    if fabs((detection[2][1] + (detection[2][3] / 2)) -
+            last_bottom_location) > relative_size and fabs(detection[2][0] - last_dtc_location[0]) > relative_size:
 
         abs_x = round((detection[2][0] - last_dtc_location[0])) * relative_size
         abs_y = round((detection[2][1] - last_dtc_location[1])) * relative_size

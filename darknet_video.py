@@ -6,6 +6,7 @@ from MotionControl import darknet_dll
 from MotionControl.utils import graphics
 from MotionControl.utils import logicals
 from MotionControl.utils import face
+from time import sleep
 
 
 configPath = "./data/yolov3-obj.cfg"
@@ -23,11 +24,11 @@ old_width, old_height = 0, 0
 dshow_active = False
 thresh_val = 0.7
 movement_speed = 1
-alpha, beta = 1.15, 20
+alpha, beta = 1.20, 25
 # higher activator or deactivator value means less frames to take an action (beacuse Fps/default_val)
 default_activator_val = 4.0
 default_deactivator_val = 2.0
-names = {'move': 'duz', 'press_move': 'basisaret', 'left_click': 'peace', 'empty': 'yumruk'}
+names = {'move': 'duz', 'press_move': 'basisaret', 'left_click': 'peace', 'empty': 'yumruk', '8pen': 'isaret'}
 
 
 darknet_image = darknet_dll.make_image(frame_width, frame_height, 3)
@@ -120,7 +121,10 @@ def YOLO():
 
     # ######## prepare wx app for GUIs ########
     prepare_wxapp()
-
+    # sleep(5)
+    # graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
+    # sleep(5)
+    # graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
     # ######## create user detection thread and make user selection ########
     user_selection_and_detection(cap, full_frame_queue)
 
@@ -136,14 +140,12 @@ def YOLO():
     while True:
         frame_read = cv2.flip(cap.read()[1], 1)
         frame_read = cv2.convertScaleAbs(frame_read, alpha=alpha, beta=beta)
-        # empty the queue for prevent queue from overfeeding
+        # empty the queue for prevent queue from overfeeding and frame delay
         while not full_frame_queue.empty():
             try:
                 full_frame_queue.get_nowait()
             except Exception:
                 continue
-            full_frame_queue.task_done()
-
         # put new frame into the queue so face detection can determine the roi
         full_frame_queue.put(frame_read)
         # skip if user not detected

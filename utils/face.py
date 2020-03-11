@@ -320,11 +320,12 @@ def detect_faces(cascade, enCodings, frame_queue, user_name, w, h):
             (top, right, bottom, left) = boxes[names.index(user_name)]
             # draw roi
             p1, p2 = calculate_roi(w, h, (left, top), (right, bottom))
-            cv2.rectangle(frame, p1, p2, (0, 255, 0), 2)
+            # draw roi rectangle
+            cv2.rectangle(frame, p1, p2, (0, 255, 0), 4)
             # update global roi
             roi = [p1, p2]
-            # draw the predicted face name on the image
-            cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+            # draw face rectangle
+            cv2.rectangle(frame, (left, top), (right, bottom), (255, 255, 0), 4)
             y = top - 15 if top - 15 > 15 else top + 15
             cv2.putText(frame, user_name, (left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             # reset undetected count
