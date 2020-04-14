@@ -74,6 +74,12 @@ def prepare_wxapp():
 
 
 def YOLO():
+    prepare_wxapp()
+    sleep(5)
+    graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
+    sleep(5)
+    graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
+    sleep(10000)
     global metaMain, netMain, altNames, frame_width, frame_height, thresh_val, old_width, old_height, darknet_image
     full_frame_queue = Queue()
 
@@ -120,11 +126,11 @@ def YOLO():
     face.roi[1] = (frame_width, frame_height)
 
     # ######## prepare wx app for GUIs ########
-    prepare_wxapp()
-    # sleep(5)
-    # graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
-    # sleep(5)
-    # graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
+    #prepare_wxapp()333333333333333333333333222222222222222222222222211111111111111768787898998990900099009099090900909788787877878788787878787
+    sleep(5)
+    graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
+    sleep(10)
+    graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
     # ######## create user detection thread and make user selection ########
     user_selection_and_detection(cap, full_frame_queue)
 

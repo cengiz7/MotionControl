@@ -7,6 +7,8 @@ from wx.lib.floatcanvas import FloatCanvas
 from math import fabs, sqrt, pow, atan2, pi, sin, cos
 from cv2 import circle, line
 
+# https://www.uihere.com/free-cliparts  ikonlar için kaynak 12-04
+
 # global wx window frame variables
 global cursor_wnd
 global eightpen_wnd
@@ -139,8 +141,24 @@ def arrange_keyboard_chars_n_lists(canvas, kradius, shift_val):
 
             if i % 8 == 0:
                 label += 1
-    return page1, page2
+    return page_list
 
+
+def arrange_keyboard_control_icons(icons_path, half_win_size, canvas):
+    icon_names = [["next-page", "enter", "space", "backspace"], ["next-page", "enter", "ctrl", "alt"]]
+    icons = [[], []]
+    for i, page_icons in enumerate(icon_names):
+        for k, icon in enumerate(page_icons):
+            x = 0 if k in [0, 2] else (half_win_size if k == 1 else -half_win_size)
+            y = 0 if k in [1, 3] else (half_win_size if k == 0 else -half_win_size)
+            bmp = wx.Image(f'{icons_path}/{icon}.png', wx.BITMAP_TYPE_PNG).ConvertToBitmap()
+            bitmap = canvas.AddScaledBitmap(bmp, (x, y), Height=half_win_size / 5, Position="cc")
+            bitmap.Show() if i == 0 else bitmap.Hide()
+            icons[i].append(bitmap)
+    return icons
+
+
+# TODO: change arrow function
 
 class ShowFps:
     # fps_after_frames = calculate fps once at every each 3 frame
@@ -238,7 +256,7 @@ class CursorIndicatorWindow(wx.Frame):
         wx.Abort()
 
 
-# create wx NavCanvas class for removing canvas toolbar etc.
+# override wx NavCanvas class & remove canvas toolbar etc.
 class NavCanvas(wx.Panel):
     def __init__(self, parent, id=wx.ID_ANY, size=wx.DefaultSize, **kwargs):
         wx.Panel.__init__(self, parent, id, size=size)
@@ -267,13 +285,15 @@ class KeyboardTrackingWindow(wx.Frame):
         self.cs = cs
 
         center_pt = (0.0, 0.0)
-        cs.AddRectangle((-kradius*4.5, -kradius*4.5), (kradius*9, kradius*9), LineWidth=4, FillColor="WHITE")
-        cs.AddCircle(center_pt, Diameter=diameter, LineWidth=2, LineColor='Black')
+        rect_size = kradius*9
         line_min, line_max = kradius*0.8, kradius*3.5
+        cs.AddCircle(center_pt, Diameter=diameter, LineWidth=2, LineColor='Black')
         cs.AddLine([(line_min, line_min), (line_max, line_max)], LineWidth=kradius/10, LineColor="RED")
         cs.AddLine([(line_min, -line_min), (line_max, -line_max)], LineWidth=kradius/10, LineColor="GREEN")
         cs.AddLine([(-line_min, -line_min), (-line_max, -line_max)], LineWidth=kradius/10, LineColor="BLUE")
         cs.AddLine([(-line_min, line_min), (-line_max, line_max)], LineWidth=kradius/10, LineColor="YELLOW")
+        cs.AddRectangle((-rect_size/2, -rect_size/2), (rect_size, rect_size),
+                        LineWidth=3, FillColor=None, LineColor="Gray")
 
         self.center_text = cs.AddScaledTextBox('', center_pt, kradius * 0.6,
                                                PadSize=kradius * 0.06, Position='cc',
@@ -285,28 +305,26 @@ class KeyboardTrackingWindow(wx.Frame):
                                              LineColor='Red', FillColor="Yellow")
 
         # 2 pages of keyboard characters
-        self.page1, self.page2 = arrange_keyboard_chars_n_lists(cs, kradius, shift_val)
-
+        self.page_list = arrange_keyboard_chars_n_lists(cs, kradius, shift_val)
+        icons_path = "./data/icons"
+        self.control_icons = arrange_keyboard_control_icons(icons_path, win_size/2, self.cs)
         self.Bind(EVT_SWTCH_PAGE, self.switch_page)
         self.Show()
         cs.ZoomToBB()
 
     def switch_page(self, event):
-        if self.current_page == 0:
-            for ch in self.page1:
-                ch.Hide()
-            for ch in self.page2:
-                ch.Show()
-        else:
-            for ch in self.page1:
-                ch.Show()
-            for ch in self.page2:
-                ch.Hide()
-        self.current_page = 0 if self.current_page else 1
+        # hide current page chars and icons firstly
+        [icon.Hide() for icon in self.control_icons[self.current_page]]
+        [icon.Hide() for icon in self.page_list[self.current_page]]
+        # show selected page chars and icons now
+        [icon.Show() for icon in self.control_icons[0 if self.current_page else 1]]
+        [icon.Show() for icon in self.page_list[0 if self.current_page else 1]]
+        # change current page state
+        self.current_page = 0 if self.current_page == 1 else 1
         self.cs.Draw(True)
 
 
-# Start wx app mainloop with a thread
+# Start wx app mainloop with a thread from main(darknet_video.py)
 def wx_app_main():
     global cursor_wnd, eightpen_wnd, window_size
     app = wx.App()
