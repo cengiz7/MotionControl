@@ -1,12 +1,14 @@
 from collections import deque
 import threading
 from pynput.mouse import Button, Controller
-from math import fabs, sqrt, pow
+from pynput.keyboard import Key
+from pynput.keyboard import Controller as KeyboardController
+from math import fabs, sqrt, pow, pi
 from PIL import ImageGrab
 from queue import Queue
 
 mouse = Controller()
-
+keyboard = KeyboardController()
 
 def calculate_relative(frame_area, screen_area, detection, last_dtc_location, last_bottom_location):
     """
@@ -47,6 +49,7 @@ def calculate_cursor_movement(x, y, speed, radius):
     return x, y
 
 
+# mouse controls
 class Controls:
     def __init__(self, frame_width, frame_height, movement_speed, names):
         self.n = names  # for action matching
@@ -59,7 +62,7 @@ class Controls:
         self.screen_area = img.size[0] * img.size[1]
         self.frame_width, self.frame_height = frame_width, frame_height
         self.frame_area = frame_width * frame_height
-        self.cursor_center_radius = 0
+        self.cursor_center_radius = 1
         self.movement_speed = movement_speed
         self.DEQUE_MAX_LEN = 32
         self.pts = deque(maxlen=self.DEQUE_MAX_LEN)
@@ -114,4 +117,116 @@ class Controls:
             if not self.left_button_clicked:
                 mouse.click(Button.left, 1)
                 self.left_button_clicked = True
+        if sign == self.n['8pen']:
+            # just update the last detection cordinates then we weill use
+            # it in the 8pen keyboard window for indicator circle
+            self.last_dtc_location = [detection[2][0], detection[2][1]]
+
+
+class KeyboardControls:
+    qpi = 0.25*pi
+    active = False
+    first_region = 0   # initial value
+    second_region = 0  # initial value
+    last_region = 0    # initial value
+    # Todo: ctrl alt kontrolleri için tutucu bir değişken lazım
+    alt_active = False
+    ctrl_active = False
+
+    def __check_region(self, radian):  # divide 8pen window to 4 pieces for controll shortcuts
+        # clockwise numerating the regions
+        if self.qpi < radian < self.qpi*3:      return 1
+        elif self.qpi > radian > -self.qpi:     return 2
+        elif -self.qpi > radian > -self.qpi*3:  return 3
+        elif self.qpi*3 < radian or radian < -self.qpi*3: return 4
+
+    def key_in(self, ch):
+        keyboard.press(ch)  # ch ~ 'A'
+        keyboard.release(ch)
+        self.__finalize_press()
+
+    def press_ctrl(self):
+        keyboard.press(Key.ctrl)
+        self.ctrl_active = True
+
+    def press_alt(self):
+        keyboard.press(Key.alt)
+        self.alt_active = True
+
+    def press_esc(self):
+        keyboard.press(Key.space)
+
+    def press_backspace(self):
+        keyboard.press(Key.backspace)
+
+    def press_enter(self):
+        keyboard.press(Key.enter)
+
+    def __finalize_press(self):
+        keyboard.release(Key.space)
+        keyboard.release(Key.alt)
+        keyboard.release(Key.esc)
+        keyboard.release(Key.ctrl)
+        keyboard.release(Key.backspace)
+        keyboard.release(Key.enter)
+        self.alt_active = False
+        self.ctrl_active = False
+
+    # detect which arm and char selected within the 2 sides of an arm
+    def __odd_even_and_arm(self):
+        if self.first_region == 4 and self.second_region == 1:
+            return 1, 4
+        elif self.first_region == 1 and self.second_region == 4:
+            return 2, 4
+        elif self.first_region < self.second_region:
+            return 1, self.first_region
+        else:
+            return 2, self.second_region
+
+    def __calculate_steps(self):
+        odd_even, arm = self.__odd_even_and_arm()
+        step = 0
+        if self.first_region == self.last_region:
+            step = 4
+        else:
+            if odd_even == 1:
+                if self.first_region < self.last_region:
+                    step = self.last_region - self.first_region
+                else:
+                    step = 4 - (self.first_region - self.last_region)
+            elif odd_even == 2:
+                if self.first_region < self.last_region:
+                    step = 4 - (self.last_region - self.first_region)
+                else:
+                    step = self.first_region - self.last_region
+        step = (step-1) * 8 # each level has 8 characters
+        step = step + ((arm-1)*2) + odd_even
+        return int(step-1)  # -1 for array indexing
+
+    def check_control(self, inout_check, radian):
+        if inout_check and not self.active:
+            self.active = True
+            self.first_region = self.__check_region(radian)
+
+        if inout_check and self.active:
+            current_region = self.__check_region(radian)
+            if self.first_region != current_region and self.second_region == 0:
+                self.second_region = current_region
+                self.last_region = current_region
+            else:
+                self.last_region = current_region
+
+        if not inout_check and not self.active:
+            if self.first_region != 0:
+                self.first_region, self.second_region, self.last_region = 0, 0, 0  # reset vals
+
+        if not inout_check and self.active:
+            self.active = False
+            if self.second_region == 0:
+                print("fonksiyon tuşu aktif")
+                return 0, self.first_region, True
+            else:
+                return self.__calculate_steps(), 0, True
+        return 0, 0, False
+
 

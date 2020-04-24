@@ -29,12 +29,15 @@ def folder2name(name):
 
 
 def delete_files(path):
-    if os.path.isdir(path):
-        for i in os.listdir(path):
-            delete_files(os.path.join(path, i))
-        os.rmdir(path)
-    else:
-        os.remove(path)
+    try:
+        if os.path.isdir(path):
+            for i in os.listdir(path):
+                delete_files(os.path.join(path, i))
+            os.rmdir(path)
+        else:
+            os.remove(path)
+    except Exception:
+        print("Error occurred while removing a file or folder!")
 
 
 def create_folder(path):
@@ -107,13 +110,13 @@ def encode_faces(random_faces_pickle, face_path, pickle_path, detection_method, 
     return True
 
 
-def new_user(face_path, cap):
+def new_user(face_path, cap, alpha, beta):
     while True:
         name = str(input("Yeni kullanici adini giriniz -> "))
         if name2folder(name) != "" and name2folder(name) != "_":
             name = name2folder(name)
             create_folder(face_path + fc_path + name)
-            while not take_pictures(face_path + fc_path + name, cap):
+            while not take_pictures(face_path + fc_path + name, cap, alpha, beta):
                 print("En az 1 fotograf kaydetmelisiniz!!!")
             # encode face images with pickle and use cnn method for face detection
             if encode_faces(face_path + "random_faces.pickle", face_path + fc_path + name, face_path + dt_path, "cnn", name, cap):
@@ -124,6 +127,7 @@ def new_user(face_path, cap):
 
 def update_user(face_path, users_list, cap):
     pass
+    # TODO: UPDATE USER JOB
 
 
 def delete_user(face_path, users_list):
@@ -132,20 +136,21 @@ def delete_user(face_path, users_list):
         choice = int(input("Silmek istediginiz kullaniciyi seciniz -> "))
         if 0 < choice < len(users_list)+1:
             # TODO: rename datasets
-            # delete_files(face_path + 'datasets/' +    name2folder(users_list[choice-1]))
+            delete_files(face_path + dt_path + name2folder(users_list[choice-1]) + '.pickle')
             delete_files(face_path + fc_path + name2folder(users_list[choice-1]))
             break
         else:
             print("Hatali secim yaptiniz!!!")
 
 
-def take_pictures(face_path, cap):
+def take_pictures(face_path, cap, alpha, beta):
     img_count = 0
     height = cap.get(4)  # float
     for entry in os.scandir(face_path):  # get current image count
         img_count += 1
     while True:
         img = cap.read()[1]
+        img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
         keypress = cv2.waitKey(1)
         # if the `q` key was pressed, break from the loop
         if keypress == ord("q"):
@@ -189,7 +194,7 @@ def choose_user(path, users_list):
             print("Hatali secim yaptiniz!!!")
 
 
-def select_user(face_path, cap):
+def select_user(face_path, cap, alpha, beta):
     create_folder(face_path + fc_path)
     create_folder(face_path + dt_path)
 
@@ -200,7 +205,7 @@ def select_user(face_path, cap):
         choice = int(input(" => "))
         if 0 < choice < 6:
             if choice == 1:
-                new_user(face_path, cap)
+                new_user(face_path, cap, alpha, beta)
             elif choice == 5:
                 graphics.post_wx_event(graphics.cursor_wnd, graphics.destroy_evnt)
                 exit(0)

@@ -4,11 +4,11 @@ import win32gui
 import wx
 import wx.lib.newevent
 from wx.lib.floatcanvas import FloatCanvas
-from math import fabs, sqrt, pow, atan2, pi, sin, cos
+from MotionControl.utils import logicals as lg
+from math import fabs, pi, sin, cos
 from cv2 import circle, line
 
 # https://www.uihere.com/free-cliparts  ikonlar için kaynak 12-04
-
 # global wx window frame variables
 global cursor_wnd
 global eightpen_wnd
@@ -19,18 +19,22 @@ destroy_evnt = DestroyApp()
 swtch_pg_evnt = SwitchKeyboardPage()
 
 angle = 0  # +- [0-180] * pi / 180
-circle_radius = 50  # bunu sil sonradan
 scale_val = 2
 firstx, firsty, radius, lastx, lasty = 0, 0, 0, 0, 0  # cordinates for cursor movement indications
 window_size = [0, 0]
 arrow_center = [0, 0]  # cordinates for arrow placement around the cursor circle
-scaled_win_size = 0  # pixels
+scaled_win_size = 0
+circle_radius = 0
 
 alphabet_chars = []
-turkce = ['A', 'E', 'İ', 'R', 'L', 'I', 'D', 'K', 'N', 'M',
-          'Y', 'U', 'S', 'T', 'B', 'O', 'Ü', 'Ş', 'Z', 'G',
-          'H', 'Ç', 'Ğ', 'C', 'V', 'P', 'Ö', 'F', 'J']  # 29 chars
-alphabet_chars = turkce  # delete this later
+turkce_capital = ['A', 'E', 'İ', 'R', 'L', 'I', 'D', 'K', 'N', 'M',
+                  'Y', 'U', 'S', 'T', 'B', 'O', 'Ü', 'Ş', 'Z', 'G',
+                  'H', 'Ç', 'Ğ', 'C', 'V', 'P', 'Ö', 'F', 'J']  # 29 chars
+turkce = ['a', 'e', 'i', 'r', 'l', 'ı', 'd', 'k', 'n', 'm',
+          'y', 'u', 's', 't', 'b', 'o', 'ü', 'ş', 'z', 'g',
+          'h', 'ç', 'ğ', 'c', 'v', 'p', 'ö', 'f', 'j']  # 29 chars
+
+alphabet_chars = turkce_capital
 # https://tr.wikipedia.org/wiki/T%C3%BCrk_alfabesindeki_harflerin_kullan%C4%B1m_s%C4%B1kl%C4%B1klar%C4%B1
 special_chars = ['.', ',', '!', '?', '@', ':', '_',
                  '0', '1', '2', '3', '4', '5', '6',
@@ -39,7 +43,7 @@ special_chars = ['.', ',', '!', '?', '@', ':', '_',
                  ')', '[', ']', '%', '<', '>', '^']
 
 
-
+# currently not used anywhere
 def calc_arrow_center(half_win_size, x, y):
     rate = 1.70  # multiply by 2.0 equals to full window size
     if half_win_size + fabs(x) + scale_val > half_win_size*rate:
@@ -55,11 +59,8 @@ def calc_arrow_center(half_win_size, x, y):
 
 def arrow_movement():
     global angle, scale_val, scaled_win_size, arrow_center
-    abs_x = lastx - firstx
-    abs_y = firsty - lasty
-    distance = sqrt(pow(fabs(abs_x), 2) + pow(fabs(abs_y), 2))  # hipotenus to detection center
+    distance, angle = lg.calcutale_distance_angle(firstx, firsty, lastx, lasty)
     if distance > radius:
-        angle = atan2(abs_y, abs_x)
         # print(angle * (180 / pi))
         scale_val = round((distance / radius) * circle_radius)
         # check if the scaled size smalled than 1/4 of wx frame
@@ -70,7 +71,6 @@ def arrow_movement():
         arrow_center[1] = scaled_win_size / 2 - (sin(angle) * distance)  # (window center - y)
         # print(+(cos(angle) * distance), -(sin(angle) * distance))
         # arrow_center = calc_arrow_center(scaled_win_size/2, +(cos(angle) * distance), -(sin(angle) * distance))
-
     else:
         # set scale value 0 to hide arrow
         scale_val = 0
@@ -145,7 +145,7 @@ def arrange_keyboard_chars_n_lists(canvas, kradius, shift_val):
 
 
 def arrange_keyboard_control_icons(icons_path, half_win_size, canvas):
-    icon_names = [["next-page", "enter", "space", "backspace"], ["next-page", "enter", "ctrl", "alt"]]
+    icon_names = [["next-page", "enter", "space", "backspace"], ["next-page", "capslock", "ctrl", "alt"]]
     icons = [[], []]
     for i, page_icons in enumerate(icon_names):
         for k, icon in enumerate(page_icons):
@@ -158,7 +158,7 @@ def arrange_keyboard_control_icons(icons_path, half_win_size, canvas):
     return icons
 
 
-# TODO: change arrow function
+# TODO: change arrow picture function
 
 class ShowFps:
     # fps_after_frames = calculate fps once at every each 3 frame
@@ -183,9 +183,6 @@ class ShowFps:
 
 class CursorIndicatorWindow(wx.Frame):
     def __init__(self, *args, **kwargs):
-        global circle_radius, scaled_win_size
-        scaled_win_size = round(min(window_size) * 0.8)
-        circle_radius = round(scaled_win_size / 15)
         wx.Frame.__init__(self, parent=None, id=wx.ID_ANY, title="Cursor Indicator Window",
                           size=(scaled_win_size, scaled_win_size),
                           style=(wx.FRAME_SHAPED
@@ -275,7 +272,7 @@ class KeyboardTrackingWindow(wx.Frame):
         win_size = round(min(window_size) * 0.45)
         wx.Frame.__init__(self, parent=None, id=wx.ID_ANY, title="Motion Control",
                           size=(win_size, win_size), style=wx.CAPTION | wx.FRAME_NO_TASKBAR | wx.STAY_ON_TOP)
-        kradius = 50
+        kradius = circle_radius
         diameter = kradius*2
         shift_val = kradius*0.80
         self.current_page = 0
@@ -295,7 +292,7 @@ class KeyboardTrackingWindow(wx.Frame):
         cs.AddRectangle((-rect_size/2, -rect_size/2), (rect_size, rect_size),
                         LineWidth=3, FillColor=None, LineColor="Gray")
 
-        self.center_text = cs.AddScaledTextBox('', center_pt, kradius * 0.6,
+        self.center_text = cs.AddScaledTextBox('A', center_pt, kradius * 0.6,
                                                PadSize=kradius * 0.06, Position='cc',
                                                LineStyle=None,
                                                Alignment="center",
@@ -307,7 +304,7 @@ class KeyboardTrackingWindow(wx.Frame):
         # 2 pages of keyboard characters
         self.page_list = arrange_keyboard_chars_n_lists(cs, kradius, shift_val)
         icons_path = "./data/icons"
-        self.control_icons = arrange_keyboard_control_icons(icons_path, win_size/2, self.cs)
+        self.control_icons = arrange_keyboard_control_icons(icons_path, rect_size*0.45, self.cs)
         self.Bind(EVT_SWTCH_PAGE, self.switch_page)
         self.Show()
         cs.ZoomToBB()
@@ -326,9 +323,11 @@ class KeyboardTrackingWindow(wx.Frame):
 
 # Start wx app mainloop with a thread from main(darknet_video.py)
 def wx_app_main():
-    global cursor_wnd, eightpen_wnd, window_size
+    global cursor_wnd, eightpen_wnd, window_size, scaled_win_size, circle_radius
     app = wx.App()
     window_size = wx.GetDisplaySize()
+    scaled_win_size = round(min(window_size) * 0.8)
+    circle_radius = round(scaled_win_size / 15)
     cursor_wnd = CursorIndicatorWindow()
     eightpen_wnd = KeyboardTrackingWindow()
     app.MainLoop()

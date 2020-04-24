@@ -53,11 +53,10 @@ def recreate_darknet_image(width, height):
 
 def user_selection_and_detection(cap, full_frame_queue):
     # User create update delete and select process
-    user_pickle, user_name = face.select_user(facePath, cap)
+    user_pickle, user_name = face.select_user(facePath, cap, alpha, beta)
 
     # start a face detection process thread for selected user detection
-    th = Thread(target=face.detect_faces, args=(faceCascade, user_pickle,
-                                                full_frame_queue, user_name,
+    th = Thread(target=face.detect_faces, args=(faceCascade, user_pickle, full_frame_queue, user_name,
                                                 frame_width, frame_height))
     th.daemon = True
     th.start()
@@ -74,12 +73,6 @@ def prepare_wxapp():
 
 
 def YOLO():
-    prepare_wxapp()
-    sleep(5)
-    graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
-    sleep(5)
-    graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
-    sleep(10000)
     global metaMain, netMain, altNames, frame_width, frame_height, thresh_val, old_width, old_height, darknet_image
     full_frame_queue = Queue()
 
@@ -124,13 +117,14 @@ def YOLO():
     cap.set(4, frame_height)
     # y1:y2, x1:x2
     face.roi[1] = (frame_width, frame_height)
-
     # ######## prepare wx app for GUIs ########
-    #prepare_wxapp()333333333333333333333333222222222222222222222222211111111111111768787898998990900099009099090900909788787877878788787878787
+    prepare_wxapp()
+    """
     sleep(5)
     graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
     sleep(10)
     graphics.post_wx_event(graphics.eightpen_wnd, graphics.swtch_pg_evnt)
+    """
     # ######## create user detection thread and make user selection ########
     user_selection_and_detection(cap, full_frame_queue)
 
@@ -193,11 +187,10 @@ def YOLO():
                     if not sign_detector.reset_check:  # reset only if has not been reset
                         sign_detector.reset_detection_counts()
                         graphics.cursor_wnd.Hide()
-                        sign_detector.controls.first_dtc_location = [0, 0]
-                        sign_detector.controls.last_dtc_location = [0, 0]
+                        graphics.eightpen_wnd.Hide()
                         sign_detector.reset_check = True  # set reset true
 
-            cv2.putText(image, f'{fps_val:3.2f} fps', (15, 15), cv2.FONT_HERSHEY_TRIPLEX, 0.55, (0, 255, 0), 1)
+            cv2.putText(image, f'{fps_val:3.1f} fps', (15, 15), cv2.FONT_HERSHEY_TRIPLEX, 0.55, (0, 255, 0), 1)
 
             cv2.imshow('Demo', image)
             k = cv2.waitKey(1) & 0xFF

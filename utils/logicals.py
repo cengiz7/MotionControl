@@ -1,5 +1,8 @@
 from MotionControl.utils import controllers
 from MotionControl.utils import graphics as gr
+from math import fabs, sqrt, pow, atan2
+
+keyboard = controllers.KeyboardControls()
 
 
 def convertBack(x, y, w, h):
@@ -39,10 +42,36 @@ def regulate_cursor_window(show, firstx=0, firsty=0, radius=0, lastx=0, lasty=0)
         gr.cursor_wnd.Hide()
 
 
+def calcutale_distance_angle(firstx, firsty, lastx, lasty):
+    abs_x = lastx - firstx
+    abs_y = firsty - lasty
+    distance = sqrt(pow(fabs(abs_x), 2) + pow(fabs(abs_y), 2))  # hipotenus to detection center
+    return distance, atan2(abs_y, abs_x)  # angle in radian
+
+
+def regulate_eightpen_window(show, firstx=0, firsty=0, radius=0, lastx=0, lasty=0):
+    if show:
+        distance, radian = calcutale_distance_angle(firstx, firsty, lastx, lasty)
+        # update indicator circle possition
+        chck = distance >= gr.circle_radius
+        char_pos, function, ok = keyboard.check_control(chck, radian)
+        if ok:
+            ch = gr.alphabet_chars[char_pos]
+            print(ch)
+            gr.eightpen_wnd.center_text.String = ch
+            keyboard.key_in(ch)
+        gr.eightpen_wnd.indicator_circle.XY = (lastx - firstx, firsty - lasty)
+        gr.eightpen_wnd.cs.Draw(True)
+        gr.eightpen_wnd.Show()
+    else:
+        gr.eightpen_wnd.Hide()
+
+
 class SignDetector:
     controls = None
     reset_check = False  # bool for sign_dict reset jobs
     cursor_wnd_dsply = False  # bool for cursor window display or hide checks
+    eightpen_wnd_dsply = False # for 8pen window
 
     def __init__(self, alt_names, frame_width, frane_height, movement_speed, names):
         self.n = names  # for action matching
@@ -70,6 +99,15 @@ class SignDetector:
                 # take action here !
                 self.controls.action(name, detection)
 
+                if name == self.n['8pen']:
+                    self.eightpen_wnd_dsply = True
+                    regulate_eightpen_window(True, self.controls.first_dtc_location[0],
+                                             self.controls.first_dtc_location[1], self.controls.cursor_center_radius,
+                                             self.controls.last_dtc_location[0], self.controls.last_dtc_location[1])
+                else:
+                    regulate_eightpen_window(False)
+                    self.cursor_wnd_dsply = False
+
                 # set display true or false for cursor indications
                 if name == self.n['move'] or name == self.n['press_move']:
                     self.cursor_wnd_dsply = True
@@ -83,9 +121,7 @@ class SignDetector:
             else:
                 # correct some values just before calling action function at the other detection
                 if self.signs_dict[name] == self.min_dtct_actv_count:
-                    if name != self.n['move'] and name != self.n['press_move']:
-                        self.controls.first_dtc_location = [0, 0]
-                    if name == self.n['move'] or name == self.n['press_move']:
+                    if name == self.n['move'] or name == self.n['press_move'] or name == self.n['8pen']:
                         # set last detection point center for initial movement calculation and others
                         self.controls.first_dtc_location = [detection[2][0], detection[2][1]]
                         # comment out right below when detection display = false
