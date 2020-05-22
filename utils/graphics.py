@@ -14,8 +14,10 @@ global cursor_wnd
 global eightpen_wnd
 
 DestroyApp, EVT_DESTROY_APP = wx.lib.newevent.NewEvent()
+SwitchCase, EVT_SWTCH_CASE = wx.lib.newevent.NewEvent()
 SwitchKeyboardPage, EVT_SWTCH_PAGE = wx.lib.newevent.NewEvent()
 destroy_evnt = DestroyApp()
+swtch_case_evnt = SwitchCase()
 swtch_pg_evnt = SwitchKeyboardPage()
 
 angle = 0  # +- [0-180] * pi / 180
@@ -25,22 +27,29 @@ window_size = [0, 0]
 arrow_center = [0, 0]  # cordinates for arrow placement around the cursor circle
 scaled_win_size = 0
 circle_radius = 0
+is_lowercase = False
 
-alphabet_chars = []
-turkce_capital = ['A', 'E', 'İ', 'R', 'L', 'I', 'D', 'K', 'N', 'M',
-                  'Y', 'U', 'S', 'T', 'B', 'O', 'Ü', 'Ş', 'Z', 'G',
-                  'H', 'Ç', 'Ğ', 'C', 'V', 'P', 'Ö', 'F', 'J']  # 29 chars
-turkce = ['a', 'e', 'i', 'r', 'l', 'ı', 'd', 'k', 'n', 'm',
-          'y', 'u', 's', 't', 'b', 'o', 'ü', 'ş', 'z', 'g',
-          'h', 'ç', 'ğ', 'c', 'v', 'p', 'ö', 'f', 'j']  # 29 chars
+turkce = ['A', 'E', 'İ', 'R', 'L', 'I', 'D', 'K', 'N', 'M',
+          'Y', 'U', 'S', 'T', 'B', 'O', 'Ü', 'Ş', 'Z', 'G',
+          'H', 'Ç', 'Ğ', 'C', 'V', 'P', 'Ö', 'F', 'J']  # 29 chars
 
-alphabet_chars = turkce_capital
+turkce_lowercase = ['a', 'e', 'i', 'r', 'l', 'ı', 'd', 'k', 'n', 'm',
+                    'y', 'u', 's', 't', 'b', 'o', 'ü', 'ş', 'z', 'g',
+                    'h', 'ç', 'ğ', 'c', 'v', 'p', 'ö', 'f', 'j']  # 29 chars
+
+# use with somestring.translate(xx_trans_tab)
+to_lower_trans_tab = str.maketrans(''.join(turkce), ''.join(turkce_lowercase))
+to_upper_trans_tab = str.maketrans(''.join(turkce_lowercase), ''.join(turkce))
+
+alphabet_chars = turkce
 # https://tr.wikipedia.org/wiki/T%C3%BCrk_alfabesindeki_harflerin_kullan%C4%B1m_s%C4%B1kl%C4%B1klar%C4%B1
 special_chars = ['.', ',', '!', '?', '@', ':', '_',
                  '0', '1', '2', '3', '4', '5', '6',
                  '7', '8', '9', '\\', '(', '+', '-',
                  '*', '/', '=', '"', "'", '`', ';',
                  ')', '[', ']', '%', '<', '>', '^']
+
+icon_names = [["next-page", "enter", "space", "backspace"], ["next-page", "capslock", "ctrl", "alt"]]
 
 
 # currently not used anywhere
@@ -145,7 +154,6 @@ def arrange_keyboard_chars_n_lists(canvas, kradius, shift_val):
 
 
 def arrange_keyboard_control_icons(icons_path, half_win_size, canvas):
-    icon_names = [["next-page", "enter", "space", "backspace"], ["next-page", "capslock", "ctrl", "alt"]]
     icons = [[], []]
     for i, page_icons in enumerate(icon_names):
         for k, icon in enumerate(page_icons):
@@ -253,37 +261,34 @@ class CursorIndicatorWindow(wx.Frame):
         wx.Abort()
 
 
-# override wx NavCanvas class & remove canvas toolbar etc.
-class NavCanvas(wx.Panel):
-    def __init__(self, parent, id=wx.ID_ANY, size=wx.DefaultSize, **kwargs):
-        wx.Panel.__init__(self, parent, id, size=size)
-        box = wx.BoxSizer(wx.VERTICAL)
-        self.Canvas = FloatCanvas.FloatCanvas(self, **kwargs)
-        box.Add(self.Canvas, 1, wx.GROW)
-        self.SetSizerAndFit(box)
-
-
 # kaynak https://github.com/wxWidgets/Phoenix/blob/master/demo/FloatCanvas.py
 class KeyboardTrackingWindow(wx.Frame):
-    indicator_circle = None
-    center_text = None
+    is_custom_hide = False
 
     def __init__(self, *args, **kwargs):
         win_size = round(min(window_size) * 0.45)
         wx.Frame.__init__(self, parent=None, id=wx.ID_ANY, title="Motion Control",
                           size=(win_size, win_size), style=wx.CAPTION | wx.FRAME_NO_TASKBAR | wx.STAY_ON_TOP)
+        self.win_size = win_size
         kradius = circle_radius
         diameter = kradius*2
         shift_val = kradius*0.80
         self.current_page = 0
-
-        # Add the Canvas
-        cs = NavCanvas(self, -1, size=(1000, 1000), Debug=0, BackgroundColor="WHITE").Canvas
-        self.cs = cs
-
         center_pt = (0.0, 0.0)
         rect_size = kradius*9
         line_min, line_max = kradius*0.8, kradius*3.5
+        icons_path = "./data/icons"
+        self.alpha_value = 255
+        self.alpha_increment = 5
+        self.change_alpha_timer = wx.Timer(self)
+        self.change_alpha_timer.Start(50)
+        self.is_mouse_over = False
+
+
+        # Add the Canvas
+        cs = FloatCanvas.FloatCanvas(self, -1, size=(win_size, win_size), Debug=0, BackgroundColor="WHITE")
+        self.cs = cs
+
         cs.AddCircle(center_pt, Diameter=diameter, LineWidth=2, LineColor='Black')
         cs.AddLine([(line_min, line_min), (line_max, line_max)], LineWidth=kradius/10, LineColor="RED")
         cs.AddLine([(line_min, -line_min), (line_max, -line_max)], LineWidth=kradius/10, LineColor="GREEN")
@@ -292,7 +297,7 @@ class KeyboardTrackingWindow(wx.Frame):
         cs.AddRectangle((-rect_size/2, -rect_size/2), (rect_size, rect_size),
                         LineWidth=3, FillColor=None, LineColor="Gray")
 
-        self.center_text = cs.AddScaledTextBox('A', center_pt, kradius * 0.6,
+        self.center_text = cs.AddScaledTextBox('', center_pt, kradius * 0.6,
                                                PadSize=kradius * 0.06, Position='cc',
                                                LineStyle=None,
                                                Alignment="center",
@@ -303,11 +308,58 @@ class KeyboardTrackingWindow(wx.Frame):
 
         # 2 pages of keyboard characters
         self.page_list = arrange_keyboard_chars_n_lists(cs, kradius, shift_val)
-        icons_path = "./data/icons"
-        self.control_icons = arrange_keyboard_control_icons(icons_path, rect_size*0.45, self.cs)
+        self.control_icons = arrange_keyboard_control_icons(icons_path, rect_size*0.45, cs)
+        box = wx.BoxSizer(wx.VERTICAL)
+        box.Add(self.cs, 1, wx.GROW)
+        del cs
+        self.SetSizerAndFit(box)
         self.Bind(EVT_SWTCH_PAGE, self.switch_page)
-        self.Show()
-        cs.ZoomToBB()
+        self.Bind(EVT_SWTCH_CASE, self.switch_lettercase)
+        self.Bind(EVT_DESTROY_APP, self.ExitApp)
+        self.Bind(wx.EVT_TIMER, self.check_cursor_pos)
+        self.Bind(wx.EVT_TIMER, self.close_smoothly)
+        self.Show(True)
+        self.cs.ZoomToBB()
+
+
+    def custom_show(self):
+        if self.is_custom_hide:
+            self.is_custom_hide = False
+            time.sleep(0.055)  # avoid race condition
+            self.alpha_value = 255
+            self.SetTransparent(255)
+            self.Show()
+        if not self.IsShownOnScreen() and not self.is_custom_hide:
+            self.alpha_value = 255
+            self.SetTransparent(255)
+            self.Show()
+
+    def custom_hide(self):
+        self.is_custom_hide = True
+
+    # check if the mouse cursor inside the window or not ( to pause smooth close )
+    def check_cursor_pos(self, event):
+        mpos = wx.GetMousePosition()
+        spos = self.GetScreenPosition()
+        # print(mpos, spos)
+        if spos.x <= mpos.x <= spos.x+self.win_size and spos.y <= mpos.y <= spos.y+self.win_size:
+            self.is_mouse_over = True
+        else:
+            self.is_mouse_over = False
+        event.Skip()
+
+    def close_smoothly(self, event):
+        if self.is_custom_hide:
+            if not self.is_mouse_over:
+                if self.alpha_value <= self.alpha_increment*2:
+                    self.is_custom_hide = False
+                    self.SetTransparent(0)
+                    self.Hide()
+                else:
+                    self.alpha_value -= self.alpha_increment
+                    self.SetTransparent(self.alpha_value)
+        event.Skip()
+
 
     def switch_page(self, event):
         # hide current page chars and icons firstly
@@ -319,6 +371,16 @@ class KeyboardTrackingWindow(wx.Frame):
         # change current page state
         self.current_page = 0 if self.current_page == 1 else 1
         self.cs.Draw(True)
+
+    def switch_lettercase(self, event):
+        global alphabet_chars, is_lowercase
+        alphabet_chars = [ch.translate(to_upper_trans_tab if is_lowercase else to_lower_trans_tab) for ch in alphabet_chars]
+        [txtbox.SetText(txtbox.String.translate(to_upper_trans_tab if is_lowercase else to_lower_trans_tab)) for txtbox in self.page_list[0]]
+        is_lowercase = not is_lowercase
+
+    def ExitApp(self, event=None):
+        print("destroy event occurred")
+        wx.Abort()
 
 
 # Start wx app mainloop with a thread from main(darknet_video.py)

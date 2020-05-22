@@ -26,7 +26,7 @@ thresh_val = 0.7
 movement_speed = 1
 alpha, beta = 1.20, 25
 # higher activator or deactivator value means less frames to take an action (beacuse Fps/default_val)
-default_activator_val = 4.0
+default_activator_val = 2.5
 default_deactivator_val = 2.0
 names = {'move': 'duz', 'press_move': 'basisaret', 'left_click': 'peace', 'empty': 'yumruk', '8pen': 'isaret'}
 
@@ -187,7 +187,8 @@ def YOLO():
                     if not sign_detector.reset_check:  # reset only if has not been reset
                         sign_detector.reset_detection_counts()
                         graphics.cursor_wnd.Hide()
-                        graphics.eightpen_wnd.Hide()
+                        if not graphics.eightpen_wnd.is_custom_hide:
+                            graphics.eightpen_wnd.custom_hide()
                         sign_detector.reset_check = True  # set reset true
 
             cv2.putText(image, f'{fps_val:3.1f} fps', (15, 15), cv2.FONT_HERSHEY_TRIPLEX, 0.55, (0, 255, 0), 1)

@@ -142,33 +142,44 @@ class KeyboardControls:
 
     def key_in(self, ch):
         keyboard.press(ch)  # ch ~ 'A'
+        self.__finalize_ctrlalt_press()
         keyboard.release(ch)
-        self.__finalize_press()
 
     def press_ctrl(self):
         keyboard.press(Key.ctrl)
-        self.ctrl_active = True
+        if self.ctrl_active:
+            keyboard.release(Key.ctrl)
+            self.ctrl_active = False
+        else:
+            self.ctrl_active = True
 
     def press_alt(self):
         keyboard.press(Key.alt)
-        self.alt_active = True
+        if self.alt_active:
+            keyboard.release(Key.alt)
+            self.alt_active = False
+        else:
+            self.alt_active = True
 
     def press_esc(self):
-        keyboard.press(Key.space)
+        keyboard.press(Key.esc)
+        keyboard.release(Key.esc)
 
     def press_backspace(self):
         keyboard.press(Key.backspace)
+        keyboard.release(Key.backspace)
 
     def press_enter(self):
         keyboard.press(Key.enter)
-
-    def __finalize_press(self):
-        keyboard.release(Key.space)
-        keyboard.release(Key.alt)
-        keyboard.release(Key.esc)
-        keyboard.release(Key.ctrl)
-        keyboard.release(Key.backspace)
         keyboard.release(Key.enter)
+
+    def press_space(self):
+        keyboard.press(Key.space)
+        keyboard.release(Key.space)
+
+    def __finalize_ctrlalt_press(self):
+        if self.ctrl_active: keyboard.release(Key.ctrl)
+        if self.alt_active: keyboard.release(Key.alt)
         self.alt_active = False
         self.ctrl_active = False
 
@@ -215,6 +226,7 @@ class KeyboardControls:
                 self.last_region = current_region
             else:
                 self.last_region = current_region
+            return self.__calculate_steps(), 0, False  # only for displaying current char at the center
 
         if not inout_check and not self.active:
             if self.first_region != 0:
@@ -224,9 +236,9 @@ class KeyboardControls:
             self.active = False
             if self.second_region == 0:
                 print("fonksiyon tuşu aktif")
-                return 0, self.first_region, True
+                return -1, self.first_region, True  # -1 for array indexing
             else:
                 return self.__calculate_steps(), 0, True
-        return 0, 0, False
+        return -1, 0, False
 
 

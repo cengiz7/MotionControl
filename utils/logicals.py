@@ -49,29 +49,63 @@ def calcutale_distance_angle(firstx, firsty, lastx, lasty):
     return distance, atan2(abs_y, abs_x)  # angle in radian
 
 
+def apply_function(func):
+    icon_names = [["next-page", "enter", "space", "backspace"], ["next-page", "capslock", "ctrl", "alt"]]
+    name = gr.icon_names[gr.eightpen_wnd.current_page][func]
+    print(name)
+    if name == "next-page":
+        gr.post_wx_event(gr.eightpen_wnd, gr.swtch_pg_evnt)
+    elif name == "enter":
+        keyboard.press_enter()
+    elif name == "space":
+        keyboard.press_space()
+    elif name == "backspace":
+        keyboard.press_backspace()
+    elif name == "capslock":
+        gr.post_wx_event(gr.eightpen_wnd, gr.swtch_case_evnt)
+    elif name == "ctrl":
+        keyboard.press_ctrl()
+    elif name == "alt":
+        keyboard.press_alt()
+
+
 def regulate_eightpen_window(show, firstx=0, firsty=0, radius=0, lastx=0, lasty=0):
     if show:
         distance, radian = calcutale_distance_angle(firstx, firsty, lastx, lasty)
         # update indicator circle possition
         chck = distance >= gr.circle_radius
         char_pos, function, ok = keyboard.check_control(chck, radian)
-        if ok:
-            ch = gr.alphabet_chars[char_pos]
-            print(ch)
-            gr.eightpen_wnd.center_text.String = ch
-            keyboard.key_in(ch)
+        # only one char input
+        if ok and function == 0:
+            try:
+                if gr.eightpen_wnd.current_page == 0:
+                    ch = gr.alphabet_chars[char_pos]
+                else:
+                    ch = gr.special_chars[char_pos]
+                print(ch)
+                gr.eightpen_wnd.center_text.SetText('')  # reset center text
+                keyboard.key_in(ch)
+            except Exception:
+                pass
+        # function or function combined with char
+        elif ok and function:
+            apply_function(function-1)  # -1 for array indexing
+        elif not ok and char_pos != -1:
+            gr.eightpen_wnd.center_text.SetText(gr.alphabet_chars[char_pos])
+
         gr.eightpen_wnd.indicator_circle.XY = (lastx - firstx, firsty - lasty)
         gr.eightpen_wnd.cs.Draw(True)
-        gr.eightpen_wnd.Show()
+        gr.eightpen_wnd.custom_show()
     else:
-        gr.eightpen_wnd.Hide()
+        if not gr.eightpen_wnd.is_custom_hide:
+            gr.eightpen_wnd.custom_hide()
 
 
 class SignDetector:
     controls = None
     reset_check = False  # bool for sign_dict reset jobs
     cursor_wnd_dsply = False  # bool for cursor window display or hide checks
-    eightpen_wnd_dsply = False # for 8pen window
+    eightpen_wnd_dsply = False  # for 8pen window
 
     def __init__(self, alt_names, frame_width, frane_height, movement_speed, names):
         self.n = names  # for action matching
