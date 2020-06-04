@@ -82,7 +82,7 @@ def regulate_eightpen_window(show, firstx=0, firsty=0, radius=0, lastx=0, lasty=
                     ch = gr.alphabet_chars[char_pos]
                 else:
                     ch = gr.special_chars[char_pos]
-                print(ch)
+                # print(ch)
                 gr.eightpen_wnd.center_text.SetText('')  # reset center text
                 keyboard.key_in(ch)
             except Exception:
@@ -163,10 +163,10 @@ class SignDetector:
                         self.controls.last_dtc_location = self.controls.first_dtc_location  # for initial display
                         # self.controls.last_bottom_location = int(round(detection[2][1] +(detection[2][3]/2)))  # y max
                     # if its not mouse hold move, release the button
-                    if name != self.n['press_move']:
+                    if self.controls.left_button_pressed and name != self.n['press_move']:
                         self.controls.release_left_press()
                     # if not mouse left click, reset it
-                    if name != self.n['left_click']:
+                    if self.controls.left_button_clicked and name != self.n['left_click']:
                         self.controls.left_button_clicked = False
                     # reset other sign detections counts
                     for key in self.signs_dict:

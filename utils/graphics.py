@@ -318,7 +318,7 @@ class KeyboardTrackingWindow(wx.Frame):
         self.Bind(EVT_DESTROY_APP, self.ExitApp)
         self.Bind(wx.EVT_TIMER, self.check_cursor_pos)
         self.Bind(wx.EVT_TIMER, self.close_smoothly)
-        self.Show(True)
+        self.Show(False)
         self.cs.ZoomToBB()
 
 

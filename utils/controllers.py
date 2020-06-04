@@ -1,5 +1,6 @@
-from collections import deque
 import threading
+from collections import deque
+from MotionControl.utils import graphics as gr
 from pynput.mouse import Button, Controller
 from pynput.keyboard import Key
 from pynput.keyboard import Controller as KeyboardController
@@ -141,24 +142,26 @@ class KeyboardControls:
         elif self.qpi*3 < radian or radian < -self.qpi*3: return 4
 
     def key_in(self, ch):
+        if (self.ctrl_active or self.alt_active) and not gr.is_lowercase:
+            ch = ch.translate(gr.to_lower_trans_tab)
         keyboard.press(ch)  # ch ~ 'A'
         self.__finalize_ctrlalt_press()
         keyboard.release(ch)
 
     def press_ctrl(self):
-        keyboard.press(Key.ctrl)
         if self.ctrl_active:
             keyboard.release(Key.ctrl)
             self.ctrl_active = False
         else:
+            keyboard.press(Key.ctrl)
             self.ctrl_active = True
 
     def press_alt(self):
-        keyboard.press(Key.alt)
         if self.alt_active:
             keyboard.release(Key.alt)
             self.alt_active = False
         else:
+            keyboard.press(Key.alt)
             self.alt_active = True
 
     def press_esc(self):
@@ -235,7 +238,6 @@ class KeyboardControls:
         if not inout_check and self.active:
             self.active = False
             if self.second_region == 0:
-                print("fonksiyon tuşu aktif")
                 return -1, self.first_region, True  # -1 for array indexing
             else:
                 return self.__calculate_steps(), 0, True
